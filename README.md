@@ -19,6 +19,9 @@ zxvnc will connect to both the Zx Spectrum and the vncserver. It will be some ki
 The 127.0.0.2 address of Spectrum is hardcoded in zxvnc.
 Unfortunately, performance is poor.
 
+For the Timex 2068 with the spectrum emulator cartdridge there is the timex.tap
+and the -timex option for the zxvnc.
+
 This program contains code from the scrplus (http://scrplus.sourceforge.net/)
 and is based on SDLVncviewer from libvncserver.
 

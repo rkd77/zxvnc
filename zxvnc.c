@@ -457,7 +457,8 @@ writescr(void)
 
 	for (i=0;i<0x1800;i++)
 	{
-		unsigned int sx=(i&0x1f)<<3, sy=((i&0x1800)>>5)|((i&0xe0)>>2)|((i&0x700)>>8);
+		unsigned int sx= (i & 0x1f) << 3;
+		unsigned int sy= ((i & (4096 + 2048))>>5)|(( i & (128 + 64 + 32)) >> 2)|((i & (1024 + 512 + 256))>>8);
 		unsigned int j;
 		unsigned char b=0; // construct the byte
 		for (j=0;j<8;j++)
@@ -473,8 +474,9 @@ writescr(void)
 	{
 		unsigned char blank[2]={0, 0};
 		const unsigned char *palp=blank;
-		unsigned int bx=(i&0x1f), by=(i>>5);
-		if((bx<w/8)&&(by<(IS_RENDER_TIMEX(render)?h:h/8))) palp=pal[bx][by];
+		unsigned int bx = (i&0x1f);
+		unsigned int by = IS_RENDER_TIMEX(render) ? (((i & (4096 + 2048)) >> 5)|((i & (128 + 64 + 32)) >> 2)|((i & (1024 + 512 + 256)) >> 8)) : (i >> 5);
+		if ((bx<w/8) && (by < (IS_RENDER_TIMEX(render)?h:h/8))) palp=pal[bx][by];
 		if(IS_RENDER_ULAPLUS(render))
 		{
 			unsigned char b=(palp[0]&0x7)|((palp[1]&0x7)<<3)|((palp[0]&0x30)<<2); // construct attribute byte
@@ -502,6 +504,16 @@ send_loop(void *arg)
 {
 	int sockfd = *(int *)arg;
 	int counter = 0;
+	int to;
+
+	if (IS_RENDER_TIMEX(render))
+	{
+		to = 6144 + 6144;
+	}
+	else
+	{
+		to = 6912;
+	}
 
 	while (TRUE)
 	{
@@ -514,7 +526,7 @@ send_loop(void *arg)
 			writescr();
 			to_refresh = counter = 0;
 
-			for (pos = 0, to_write = 6912; to_write;)
+			for (pos = 0, to_write = to; to_write;)
 			{
 				int sent = write(sockfd, display + pos, to_write);
 
@@ -556,17 +568,8 @@ main(int argc,char** argv)
 #endif
 
 	for (i = 1, j = 1; i < argc; i++)
-		if (!strcmp(argv[i], "-viewonly"))
-			viewOnly = 1;
-		else if (!strcmp(argv[i], "-resizable"))
-			enableResizable = 1;
-		else if (!strcmp(argv[i], "-no-resizable"))
-			enableResizable = 0;
-		else if (!strcmp(argv[i], "-listen")) {
-		        listenLoop = 1;
-			argv[i] = "-listennofork";
-                        ++j;
-		}
+		if (!strcmp(argv[i], "-timex"))
+			render = RENDER_TIMEX;
 		else {
 			if (i != j)
 				argv[j] = argv[i];
@@ -626,7 +629,16 @@ main(int argc,char** argv)
 	      cleanup(cl);
 	      break;
 	    }
+	cl->format.bitsPerPixel = 32;
 	bytesPerPixel = cl->format.bitsPerPixel / 8;
+
+	cl->format.redShift = 16;
+	cl->format.greenShift = 8;
+	cl->format.blueShift = 0;
+	cl->format.redMax = 255;
+	cl->format.greenMax = 255;
+	cl->format.blueMax = 255;
+	SetFormatAndEncodings(cl);
 
 		update(cl, 0, 0, 256, 192);
 
