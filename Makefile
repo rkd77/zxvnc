@@ -7,4 +7,4 @@ timex.tap: timex.c
 	zcc +zx -vn  -lndos -llibsocket -lim2 -create-app -o timex.bin timex.c
 
 zxvnc:	zxvnc.c
-	$(CC) -o $@ $(CFLAGS) `pkg-config --cflags libvncclient` `pkg-config --libs libvncclient` -lm $<
+	$(CC) -o $@ -O6 $(CFLAGS) `pkg-config --cflags libvncclient` `pkg-config --libs libvncclient` -lm $<
