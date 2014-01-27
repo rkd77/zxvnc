@@ -33,7 +33,8 @@ char
 getSingleKeypress()
 {
 	uchar k=0;
-	if (readoffset != bufoffset) {
+	if (readoffset != bufoffset)
+	{
 #asm
 		di
 #endasm
@@ -56,7 +57,8 @@ M_BEGIN_ISR(isr)
 {
 	uchar k = in_GetKey();
 
-	if (k) {
+	if (k)
+	{
 		*(kbuf+bufoffset) = k;
 
 		bufoffset++;
@@ -125,6 +127,8 @@ main()
 	unsigned int offset, to_send;
 	int sockfd, connfd, rc;
 	int pos = 0;
+	unsigned char ch, but;
+	unsigned int x, y;
 
 	/* 0x0C clears the screen in the z88dk default console driver */
 	putchar(0x0C);
@@ -134,7 +138,8 @@ main()
 	   supports AF_INET at present. SOCK_STREAM in this context is
            for a TCP connection. */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) {
+	if (sockfd < 0)
+	{
 		printk("Could not open the socket - rc=%d\n", sockfd);
 		return;
 	}
@@ -147,7 +152,8 @@ main()
 	my_addr.sin_family = AF_INET;
 	my_addr.sin_port = htons(2000);		/* Port 2000 */
 
-	if (bind(sockfd, &my_addr, sizeof(my_addr)) < 0) {
+	if (bind(sockfd, &my_addr, sizeof(my_addr)) < 0)
+	{
 		printk("Bind failed.\n");
 		sockclose(sockfd);
 		return;
@@ -156,7 +162,8 @@ main()
 	/* The socket should now listen. The Spectranet hardware in
 	   its present form doesn't support changing the backlog, but
            the second argument to listen should still be a sensible value */
-	if(listen(sockfd, 1) < 0) {
+	if (listen(sockfd, 1) < 0)
+	{
 		printk("listen failed.\n");
 		sockclose(sockfd);
 		return;
@@ -172,23 +179,33 @@ main()
 	   appropriately */
 
 	connfd = accept(sockfd, NULL, NULL);
-	if (connfd == 0) {
+	if (connfd == 0)
+	{
 		printk("accept failed\n");
 		return;
 	}
 
+#ifdef TIMEX
+#asm
+	ld a,2
+	out (255),a
+#endasm
+#endif
 	inputinit();
-	while(1) {
+	while(1)
+	{
 		rc = poll_fd(connfd);
-		if (rc & POLLIN) {
+		if (rc & POLLIN)
+		{
 			unsigned char *s;
+			int r = recv(connfd, bufor + pos, 1497, 0);
 
-			rc = recv(connfd, bufor + pos, 1497, 0);
-			if (rc < 0) {
+			if (r < 0)
+			{
 				printk("recv failed!\n");
 				break;
 			}
-			for (s = bufor; rc > 0; rc -= 3)
+			for (s = bufor; r > 0; r -= 3)
 			{
 				unsigned char *where = (unsigned char *)*(void **)s;
 
@@ -196,31 +213,39 @@ main()
 				*where = *s++;
 			}
 			pos = 0;
-			if (rc < 0)
+			if (r < 0)
 			{
-				pos = rc + 3;
+				pos = r + 3;
 				*bufor = *s;
 				*(bufor+1) = *(s+1);
 			}
 		}
-		if (rc & POLLHUP) {
+		if (rc & POLLHUP)
+		{
 			break;
 		}
-		send_buffer.ch = getSingleKeypress();
-		in_MouseKemp(&send_buffer.but, &send_buffer.x, &send_buffer.y);
 
+		ch = getSingleKeypress();
+		in_MouseKemp(&but, &x, &y);
+
+		if (x == send_buffer.x && y == send_buffer.y && ch == send_buffer.ch && but == send_buffer.but) continue;
+
+		send_buffer.ch = ch;
+		send_buffer.but = but;
+		send_buffer.x = x;
+		send_buffer.y = y;
 
 		for (start = (unsigned char *)&send_buffer, offset = 0, to_send = sizeof(send_buffer); to_send;)
 		{
-			rc = send(connfd, start + offset, to_send, 0);
+			int r = send(connfd, start + offset, to_send, 0);
 		//printf("rc = %d\n",rc);
-			if (rc < 0)
+			if (r < 0)
 			{
 				printk("send failed!\n");
 				goto wypad;
 			}
-			to_send -= rc;
-			offset += rc;
+			to_send -= r;
+			offset += r;
 		}
 	}
 wypad:
