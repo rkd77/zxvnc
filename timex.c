@@ -16,6 +16,8 @@
 
 #define KBUFSZ 8
 
+unsigned char bufor[1500];
+
 char kbuf[KBUFSZ];	/* Circular keyboard buffer */
 int bufoffset;		/* buffer offset */
 int readoffset;		/* where we've got to reading the buffer */
@@ -117,13 +119,12 @@ struct send
 
 main()
 {
-	int sockfd, connfd, rc;
 	struct sockaddr_in my_addr;
-	char *display1 = (char *)16384;
-	char *display2 = (char *)24576;
-	char *display = display1;
-	int pos = 0, to_read = 6144;
 	struct pollfd p;	/* the poll information structure */
+	unsigned char *start;
+	unsigned int offset, to_send;
+	int sockfd, connfd, rc;
+	int pos = 0;
 
 	/* 0x0C clears the screen in the z88dk default console driver */
 	putchar(0x0C);
@@ -133,7 +134,8 @@ main()
 	   supports AF_INET at present. SOCK_STREAM in this context is
            for a TCP connection. */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) {
+	if (sockfd < 0)
+	{
 		printk("Could not open the socket - rc=%d\n", sockfd);
 		return;
 	}
@@ -146,7 +148,8 @@ main()
 	my_addr.sin_family = AF_INET;
 	my_addr.sin_port = htons(2000);		/* Port 2000 */
 
-	if (bind(sockfd, &my_addr, sizeof(my_addr)) < 0) {
+	if (bind(sockfd, &my_addr, sizeof(my_addr)) < 0)
+	{
 		printk("Bind failed.\n");
 		sockclose(sockfd);
 		return;
@@ -155,7 +158,8 @@ main()
 	/* The socket should now listen. The Spectranet hardware in
 	   its present form doesn't support changing the backlog, but
            the second argument to listen should still be a sensible value */
-	if(listen(sockfd, 1) < 0) {
+	if (listen(sockfd, 1) < 0)
+	{
 		printk("listen failed.\n");
 		sockclose(sockfd);
 		return;
@@ -171,7 +175,8 @@ main()
 	   appropriately */
 
 	connfd = accept(sockfd, NULL, NULL);
-	if (connfd == 0) {
+	if (connfd == 0)
+	{
 		printk("accept failed\n");
 		return;
 	}
@@ -180,48 +185,58 @@ main()
 	ld a,2
 	out (255),a
 #endasm
+
 	inputinit();
-	while(1) {
+	while(1)
+	{
 		rc = poll_fd(connfd);
-		if (rc & POLLIN) {
-			rc = recv(connfd, display + pos, to_read, 0);
-			if (rc < 0) {
+		if (rc & POLLIN)
+		{
+			unsigned char *s;
+
+			rc = recv(connfd, bufor + pos, 1497, 0);
+			if (rc < 0)
+			{
 				printk("recv failed!\n");
-				sockclose(connfd);
 				break;
 			}
-			pos += rc;
-			to_read -= rc;
-			if (to_read == 0)
+			for (s = bufor; rc > 0; rc -= 3)
 			{
-				pos = 0;
-				to_read = 6144;
-				if (display == display1)
-				{
-					display = display2;
-				}
-				else
-				{
-					display = display1;
-				}
-				continue;
+				unsigned char *where = (unsigned char *)*(void **)s;
+
+				s += 2;
+				*where = *s++;
+			}
+			pos = 0;
+			if (rc < 0)
+			{
+				pos = rc + 3;
+				*bufor = *s;
+				*(bufor+1) = *(s+1);
 			}
 		}
-		if (rc & POLLHUP) {
+		if (rc & POLLHUP)
+		{
 			break;
 		}
 		send_buffer.ch = getSingleKeypress();
 		in_MouseKemp(&send_buffer.but, &send_buffer.x, &send_buffer.y);
 
-		rc = send(connfd, (unsigned char *)&send_buffer, sizeof(send_buffer), 0);
+
+		for (start = (unsigned char *)&send_buffer, offset = 0, to_send = sizeof(send_buffer); to_send;)
+		{
+			rc = send(connfd, start + offset, to_send, 0);
 		//printf("rc = %d\n",rc);
-		if (rc < 0) {
-			printk("send failed!\n");
-			sockclose(connfd);
-			break;
+			if (rc < 0)
+			{
+				printk("send failed!\n");
+				goto wypad;
+			}
+			to_send -= rc;
+			offset += rc;
 		}
 	}
-
+wypad:
 	/* Close the listening socket and exit. */
 	sockclose(sockfd);
 	printk("Finished.\n");

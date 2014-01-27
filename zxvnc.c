@@ -53,7 +53,9 @@ static int rightAltKeyDown, leftAltKeyDown;
 
 
 static yuv_t post[256][192];
-//unsigned int licznik;
+unsigned int ch_counter;
+
+unsigned char bufor[(6144 + 6144) * 3];
 
 static void
 zxtorgb(unsigned char zx, rgb_t rgb)
@@ -424,16 +426,26 @@ static void
 handleSpectrumEvent(rfbClient *cl, struct read_spectrum *e)
 {
 	static struct read_spectrum old = {0};
+	static rfbKeySym k = 0;
 
 	if (e->ch != old.ch)
 	{
 		if (e->ch == 0)
 		{
-			SendKeyEvent(cl, old.ch, FALSE);
+			SendKeyEvent(cl, k, FALSE);
 		}
 		else
 		{
-			SendKeyEvent(cl, e->ch, TRUE);
+			switch (e->ch)
+			{
+				case 13:
+					k = XK_Return;
+					break;
+				default:
+					k = (rfbKeySym)e->ch;
+					break;
+			}
+			SendKeyEvent(cl, k, TRUE);
 		}
 	}
 	if (e->x != old.x || e->y != old.y || e->but != old.but)
@@ -445,6 +457,7 @@ handleSpectrumEvent(rfbClient *cl, struct read_spectrum *e)
 	old = *e;
 }
 
+static void *changes;
 
 static void
 writescr(void)
@@ -454,8 +467,7 @@ writescr(void)
 	unsigned char *address = display;
 	const unsigned int w = 256;
 	const unsigned int h = 192;
-
-	//licznik = 0;
+	changes = bufor;
 
 	for (i=0;i<0x1800;i++)
 	{
@@ -469,8 +481,14 @@ writescr(void)
 			if ((sx+j<w)&&(sy<h)) px=npx[sx+j][sy];
 			b+=px?(1<<(7-j)):0;
 		}
-		//if (*address != b) ++licznik;
-		*address++ = b;
+		if (*address != b)
+		{
+			*((unsigned short *)changes) = (i + 16384);
+			changes += 2;
+			*((unsigned char *)changes) = *address = b;
+			++changes;
+		}
+		++address;
 	}
 	// Dump: END OF DISPLAY FILE; START OF ATTRIBUTE FILE
 	for (i=0; i < (IS_RENDER_TIMEX(render) ? 0x1800 : 0x300); i++)
@@ -487,8 +505,14 @@ writescr(void)
 		}
 		else
 		{
-			//if (*address != palp[0]) ++licznik;
-			*address++ = palp[0];
+			if (*address != palp[0])
+			{
+				*((unsigned short *)changes) = (i + 16384 + (IS_RENDER_TIMEX(render) ? 8192 : 6144));
+				changes += 2;
+				*((unsigned char *)changes) = *address = palp[0];
+				++changes;
+			}
+			++address;
 		}
 	}
 	// Dump: END OF ATTRIBUTE FILE
@@ -500,9 +524,7 @@ writescr(void)
 			*address++ = palent[p];
 		// Dump: END OF PALETTE
 	}
-	//fprintf(stderr, "licznik=%d\n", licznik);
 }
-
 
 static void *
 send_loop(void *arg)
@@ -510,15 +532,6 @@ send_loop(void *arg)
 	int sockfd = *(int *)arg;
 	int counter = 0;
 	int to;
-
-	if (IS_RENDER_TIMEX(render))
-	{
-		to = 6144 + 6144;
-	}
-	else
-	{
-		to = 6912;
-	}
 
 	while (TRUE)
 	{
@@ -531,9 +544,9 @@ send_loop(void *arg)
 			writescr();
 			to_refresh = counter = 0;
 
-			for (pos = 0, to_write = to; to_write;)
+			for (pos = 0, to_write = (unsigned char *)changes - bufor; to_write;)
 			{
-				int sent = write(sockfd, display + pos, to_write);
+				int sent = write(sockfd, bufor + pos, to_write);
 
 				if (sent < 0)
 				{

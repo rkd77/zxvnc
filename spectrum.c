@@ -16,6 +16,8 @@
 
 #define KBUFSZ 8
 
+unsigned char bufor[1500];
+
 char kbuf[KBUFSZ];	/* Circular keyboard buffer */
 int bufoffset;		/* buffer offset */
 int readoffset;		/* where we've got to reading the buffer */
@@ -117,11 +119,12 @@ struct send
 
 main()
 {
-	int sockfd, connfd, rc;
 	struct sockaddr_in my_addr;
-	char *display = (char *)16384;
-	int pos = 0, to_read = 6912;
 	struct pollfd p;	/* the poll information structure */
+	unsigned char *start;
+	unsigned int offset, to_send;
+	int sockfd, connfd, rc;
+	int pos = 0;
 
 	/* 0x0C clears the screen in the z88dk default console driver */
 	putchar(0x0C);
@@ -178,18 +181,26 @@ main()
 	while(1) {
 		rc = poll_fd(connfd);
 		if (rc & POLLIN) {
-			rc = recv(connfd, display + pos, to_read, 0);
+			unsigned char *s;
+
+			rc = recv(connfd, bufor + pos, 1497, 0);
 			if (rc < 0) {
 				printk("recv failed!\n");
-				sockclose(connfd);
 				break;
 			}
-			pos += rc;
-			to_read -= rc;
-			if (to_read == 0) {
-				pos = 0;
-				to_read = 6912;
-				continue;
+			for (s = bufor; rc > 0; rc -= 3)
+			{
+				unsigned char *where = (unsigned char *)*(void **)s;
+
+				s += 2;
+				*where = *s++;
+			}
+			pos = 0;
+			if (rc < 0)
+			{
+				pos = rc + 3;
+				*bufor = *s;
+				*(bufor+1) = *(s+1);
 			}
 		}
 		if (rc & POLLHUP) {
@@ -198,15 +209,21 @@ main()
 		send_buffer.ch = getSingleKeypress();
 		in_MouseKemp(&send_buffer.but, &send_buffer.x, &send_buffer.y);
 
-		rc = send(connfd, (unsigned char *)&send_buffer, sizeof(send_buffer), 0);
+
+		for (start = (unsigned char *)&send_buffer, offset = 0, to_send = sizeof(send_buffer); to_send;)
+		{
+			rc = send(connfd, start + offset, to_send, 0);
 		//printf("rc = %d\n",rc);
-		if (rc < 0) {
-			printk("send failed!\n");
-			sockclose(connfd);
-			break;
+			if (rc < 0)
+			{
+				printk("send failed!\n");
+				goto wypad;
+			}
+			to_send -= rc;
+			offset += rc;
 		}
 	}
-
+wypad:
 	/* Close the listening socket and exit. */
 	sockclose(sockfd);
 	printk("Finished.\n");
