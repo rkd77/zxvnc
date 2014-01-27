@@ -53,7 +53,7 @@ static int rightAltKeyDown, leftAltKeyDown;
 
 
 static yuv_t post[256][192];
-
+//unsigned int licznik;
 
 static void
 zxtorgb(unsigned char zx, rgb_t rgb)
@@ -455,6 +455,8 @@ writescr(void)
 	const unsigned int w = 256;
 	const unsigned int h = 192;
 
+	//licznik = 0;
+
 	for (i=0;i<0x1800;i++)
 	{
 		unsigned int sx= (i & 0x1f) << 3;
@@ -467,6 +469,7 @@ writescr(void)
 			if ((sx+j<w)&&(sy<h)) px=npx[sx+j][sy];
 			b+=px?(1<<(7-j)):0;
 		}
+		//if (*address != b) ++licznik;
 		*address++ = b;
 	}
 	// Dump: END OF DISPLAY FILE; START OF ATTRIBUTE FILE
@@ -484,6 +487,7 @@ writescr(void)
 		}
 		else
 		{
+			//if (*address != palp[0]) ++licznik;
 			*address++ = palp[0];
 		}
 	}
@@ -496,6 +500,7 @@ writescr(void)
 			*address++ = palent[p];
 		// Dump: END OF PALETTE
 	}
+	//fprintf(stderr, "licznik=%d\n", licznik);
 }
 
 
@@ -659,7 +664,7 @@ main(int argc,char** argv)
 
 				for (pos = (unsigned char *)&read_spec, count = sizeof(read_spec); count > 0;)
 				{ 
-					int ile = read(sockfd, pos, sizeof(read_spec));
+					int ile = read(sockfd, pos, count);
 
 					if (ile < 0) break;
 					pos += ile;
