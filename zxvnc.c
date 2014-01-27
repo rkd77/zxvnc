@@ -12,7 +12,7 @@
 #include <math.h>
 
 static unsigned char display[12288 + 64];
-static int to_refresh;
+static rfbBool to_refresh;
 
 struct read_spectrum
 {
@@ -367,7 +367,7 @@ dither(void)
 static void update(rfbClient* cl,int x,int y,int w,int h) {
 //fprintf(stderr, "update: x=%d y=%d w=%d h=%d\n", x,y,w,h);
 	apply_tweak(cl, x, y, w, h);
-	to_refresh = 1;
+	to_refresh = TRUE;
 }
 
 
@@ -539,10 +539,10 @@ send_loop(void *arg)
 		{
 			int pos, to_write;
 
+			to_refresh = FALSE;
 			pickattrs();
 			dither();
 			writescr();
-			to_refresh = counter = 0;
 
 			for (pos = 0, to_write = (unsigned char *)changes - bufor; to_write;)
 			{
@@ -564,7 +564,6 @@ send_loop(void *arg)
 				.tv_nsec = 10000000
 			};
 			nanosleep(&t, NULL);
-			++counter;
 		}
 	}
 	return NULL;
