@@ -205,6 +205,8 @@ main()
 				printk("recv failed!\n");
 				break;
 			}
+
+			r += pos;
 			for (s = bufor; r > 0; r -= 3)
 			{
 				unsigned char *where = (unsigned char *)*(void **)s;
@@ -212,6 +214,7 @@ main()
 				s += 2;
 				*where = *s++;
 			}
+
 			pos = 0;
 			if (r < 0)
 			{
