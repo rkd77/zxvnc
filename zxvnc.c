@@ -422,6 +422,32 @@ static void cleanup(rfbClient* cl)
     rfbClientCleanup(cl);
 }
 
+static rfbKeySym
+decodeSpectrumKey(unsigned char key)
+{
+	switch (key)
+	{
+		case 7:
+			return XK_Escape;
+		case 8:
+			return XK_Left;
+		case 9:
+			return XK_Right;
+		case 10:
+			return XK_Down;
+		case 11:
+			return XK_Up;
+		case 12:
+			return XK_BackSpace;
+		case 13:
+			return XK_Return;
+		case 130:
+			return XK_Tab;
+		default:
+			return (rfbKeySym)key; 
+	}
+}
+
 static void
 handleSpectrumEvent(rfbClient *cl, struct read_spectrum *e)
 {
@@ -436,15 +462,7 @@ handleSpectrumEvent(rfbClient *cl, struct read_spectrum *e)
 		}
 		else
 		{
-			switch (e->ch)
-			{
-				case 13:
-					k = XK_Return;
-					break;
-				default:
-					k = (rfbKeySym)e->ch;
-					break;
-			}
+			k = decodeSpectrumKey(e->ch);
 			SendKeyEvent(cl, k, TRUE);
 		}
 	}
